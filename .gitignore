@@ -1,0 +1,39 @@
+# Go Binaries and compiled objects
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+
+# Compiled project binary
+delver
+
+# Test binaries and coverage reports
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Local build artifacts & logs
+*.d
+*.tmp
+*.log
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files
+.env
+.env.local
