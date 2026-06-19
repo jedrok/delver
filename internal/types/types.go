@@ -8,8 +8,9 @@ type AgentMessage struct {
 }
 
 type ToolDef struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }
 
 type ToolCall struct {
@@ -23,7 +24,7 @@ type LLMCallInput struct {
 	Tools    []ToolDef      `json:"tools,omitempty"`
 }
 
-type LLCallOuput struct {
+type LLMCallOutput struct {
 	Content  string    `json:"content"`
 	Done     bool      `json:"done"`
 	ToolCall *ToolCall `json:"tool_call,omitempty"`
@@ -46,13 +47,9 @@ type AgentLoopInput struct {
 	ToolDef       []ToolDef `json:"tool_defs"`
 }
 
-type SubQuestions struct {
-	SubQuestions string `json:"sub_questions"`
-}
-
 type ResearchResult struct {
-	SubQuestions string         `json:"sub_questions"`
-	Findings     []AgentMessage `json:"findings"`
+	SubQuestion string         `json:"sub_questions"`
+	Findings    []AgentMessage `json:"findings"`
 }
 
 type SynthesisOutput struct {
@@ -79,12 +76,16 @@ type ApprovalGateInput struct {
 	TimeoutMs int64  `json:"time_out"`
 }
 
-type ApprovalResutl struct {
-	Report string `jsone:"report"`
+type ApprovalResult struct {
+	Report string `json:"report"`
 	Status string `json:"status"`
 }
 
 type PipelineStatus struct {
 	Phase  string `json:"phase"`
 	Status string `json:"status"`
+}
+
+type PlanOutput struct {
+	SubQuestions []string `json:"sub_questions"`
 }

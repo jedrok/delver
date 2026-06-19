@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 )
 
 type Config struct {
-	OpenAIkey      string
+	OpenAIAPIKey   string
 	TemporalHost   string
 	TaskQueue      string
 	PlanModel      string
@@ -17,10 +18,10 @@ type Config struct {
 	SynthesisModel string
 }
 
-func LoadC() (*Config, error) {
+func Load() (*Config, error) {
 	cfg := &Config{
 
-		OpenAIkey:      os.Getenv("OPENAI_API_KEY"),
+		OpenAIAPIKey:   os.Getenv("OPENAI_API_KEY"),
 		TemporalHost:   os.Getenv("TEMPORAL_HOST_PORT"),
 		TaskQueue:      os.Getenv("TASK_QUEUE"),
 		PlanModel:      os.Getenv("PLAN_MODEL"),
@@ -66,4 +67,12 @@ var LongRunningOptions = workflow.ActivityOptions{
 		BackoffCoefficient:     2.0,
 		NonRetryableErrorTypes: []string{"PermanentError"},
 	},
+}
+
+func Defaults() *Config {
+	cfg, err := Load()
+	if err != nil {
+		panic(fmt.Sprintf("failed to load config: %v", err))
+	}
+	return cfg
 }
