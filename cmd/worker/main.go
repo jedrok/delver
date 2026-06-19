@@ -8,7 +8,6 @@ import (
 	"github.com/jedrok/delver/internal/pipeline"
 	"github.com/jedrok/delver/internal/workflows"
 	"github.com/joho/godotenv"
-	openai "github.com/sashabaranov/go-openai"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -34,8 +33,7 @@ func main() {
 	}
 	defer c.Close()
 
-	openaiClient := openai.NewClient(cfg.OpenAIAPIKey)
-	llmActivities := activities.NewLLMActivities(openaiClient, cfg)
+	llmActivities := activities.NewLLMActivities(cfg)
 	toolActivities := activities.NewToolActivities()
 
 	// create the worker

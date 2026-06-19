@@ -44,14 +44,9 @@ func ResearchPipelineWorkflow(
 
 	var planResp types.LLMCallOutput
 
-	err := workflow.ExecuteActivity(
-		llmCtx,
-		llmActivities.GenericLLMCall,
-		types.LLMCallInput{
-			Model:    cfg.PlanModel,
-			Messages: planMessages,
-		},
-	).Get(ctx, &planResp)
+	err := workflow.ExecuteActivity(llmCtx, llmActivities.GenericLLMCall, types.LLMCallInput{
+		Model:    cfg.PlanModel,
+		Messages: planMessages}).Get(ctx, &planResp)
 
 	if err != nil {
 		return types.PipelineOutput{},
@@ -73,7 +68,7 @@ func ResearchPipelineWorkflow(
 	results := make([]types.ResearchResult, len(plan.SubQuestions))
 	errs := make([]error, len(plan.SubQuestions))
 
-	var wg workflow.WaitGroup
+	wg := workflow.NewWaitGroup(ctx)
 
 	for i, q := range plan.SubQuestions {
 		// i, q := i, q

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jedrok/delver/internal/config"
 	"github.com/jedrok/delver/internal/types"
@@ -18,7 +19,13 @@ type LLMActivities struct {
 	config *config.Config
 }
 
-func NewLLMActivities(client *openai.Client, cfg *config.Config) *LLMActivities {
+func NewLLMActivities(cfg *config.Config) *LLMActivities {
+	clientConfig := openai.DefaultConfig(cfg.GeminiAPIKey)
+
+	clientConfig.BaseURL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+	client := openai.NewClientWithConfig(clientConfig)
+
 	return &LLMActivities{
 		client: client,
 		config: cfg,
@@ -123,6 +130,14 @@ func classifyOpenAIError(err error) error {
 		)
 
 	case 429:
+		// quota is over not recoverable by retryin
+		if strings.Contains(apiErr.Message, "exceeded your current quota") {
+			return temporal.NewNonRetryableApplicationError(
+				fmt.Sprintf("openai quota exceeded: %v", err),
+				"PermanentError",
+				err,
+			)
+		}
 		return temporal.NewApplicationError(
 			fmt.Sprintf("openai rate limited: %v", err),
 			"RateLimitError",
