@@ -155,7 +155,7 @@ func (a *ToolActivities) fetchPage(ctx context.Context,
 		)
 	}
 
-	// truncate to 2000 chars
+	// truncate to 2000 chars to save tokens
 	content := string(body)
 	if len(content) > 2000 {
 		content = content[:2000] + "... [truncated]"

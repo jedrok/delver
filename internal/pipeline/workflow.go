@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jedrok/delver/internal/activities"
 	"github.com/jedrok/delver/internal/config"
@@ -17,6 +18,7 @@ import (
 // phase 1 break question into sub questions
 // phase 2 research each sub question in parallel using child workflows
 // phase 3 synthesize all findings into a single cited report
+// phase 4 give human approval for the research pipeline
 func ResearchPipelineWorkflow(
 	ctx workflow.Context,
 	input types.PipelineInput,
@@ -74,6 +76,11 @@ func ResearchPipelineWorkflow(
 		// i, q := i, q
 
 		wg.Add(1)
+
+		// stagger the child workflows by a few secs to avoid hitting api alot
+		if i < 0 {
+			workflow.Sleep(ctx, time.Second*12)
+		}
 
 		workflow.Go(ctx, func(gCtx workflow.Context) {
 			defer wg.Done()
@@ -157,11 +164,29 @@ func ResearchPipelineWorkflow(
 			fmt.Errorf("synthesis phase failed: %w", err)
 	}
 
-	logger.Info("pipeline complete")
+	// phase 4 approval
+	logger.Info("phase 4: waiting for approval")
 
+	var approvalResult types.ApprovalResult
+	approvalCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: fmt.Sprintf("%s-approval",
+			workflow.GetInfo(ctx).WorkflowExecution.ID),
+		ParentClosePolicy: enumspb.PARENT_CLOSE_POLICY_TERMINATE,
+	})
+	err = workflow.ExecuteChildWorkflow(approvalCtx, workflows.ApprovalGateWorkflow,
+		types.ApprovalGateInput{
+			Report:  synthesisResp.Content,
+			Timeout: 24 * time.Hour,
+		},
+	).Get(ctx, &approvalResult)
+	if err != nil {
+		return types.PipelineOutput{}, fmt.Errorf("approval gate failed: %w", err)
+	}
+
+	logger.Info("pipeline complete", "status", approvalResult.Status)
 	return types.PipelineOutput{
-		Report: synthesisResp.Content,
-		Status: "pending_approval",
+		Report: approvalResult.Report,
+		Status: approvalResult.Status,
 	}, nil
 }
 

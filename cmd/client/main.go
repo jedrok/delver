@@ -54,7 +54,7 @@ func main() {
 		log.Fatalf("failed to start workflow: %v", err)
 	}
 
-	log.Println("waiting for result... (this may take a minute or two)")
+	log.Println("waiting for result...this may take a while")
 
 	var result types.PipelineOutput
 	err = we.Get(context.Background(), &result)

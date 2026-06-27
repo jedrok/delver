@@ -1,6 +1,9 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type AgentMessage struct {
 	Role    string `json:"role"`
@@ -72,8 +75,8 @@ type ApprovalDecision struct {
 }
 
 type ApprovalGateInput struct {
-	Report    string `json:"report"`
-	TimeoutMs int64  `json:"time_out"`
+	Report  string        `json:"report"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 type ApprovalResult struct {

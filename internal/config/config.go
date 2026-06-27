@@ -34,12 +34,14 @@ func Load() (*Config, error) {
 
 // activity option preset for all llm API calls
 var LLMCallOptions = workflow.ActivityOptions{
-	StartToCloseTimeout:    60 * time.Second,
-	ScheduleToCloseTimeout: 5 * time.Minute,
+	// High enough to handle slow synthesis generations over a wire
+	StartToCloseTimeout:    90 * time.Second,
+	ScheduleToCloseTimeout: 10 * time.Minute, // give 10mins to avoid violating gemini free api quota rate limits
 	RetryPolicy: &temporal.RetryPolicy{
-		MaximumAttempts:        3,
-		InitialInterval:        2 * time.Second,
+		InitialInterval:        4 * time.Second,
 		BackoffCoefficient:     2.0,
+		MaximumInterval:        60 * time.Second, // avoid gemini cool off period
+		MaximumAttempts:        0,
 		NonRetryableErrorTypes: []string{"PermanentError"},
 	},
 }

@@ -105,3 +105,54 @@ func AgentLoopWorkflow(ctx workflow.Context, input types.AgentLoopInput) (types.
 	}, nil
 
 }
+
+const ApprovalSignaleName string = "approval"
+
+func ApprovalGateWorkflow(ctx workflow.Context, input types.ApprovalGateInput) (types.ApprovalResult, error) {
+
+	logger := workflow.GetLogger(ctx)
+	logger.Info("approval gate is open, waiting for decision")
+
+	currentStatus := types.PipelineStatus{
+		Phase:  "approval",
+		Status: "waiting",
+	}
+	err := workflow.SetQueryHandler(ctx, "getStatus",
+		func() (types.PipelineStatus, error) {
+			return currentStatus, nil
+		})
+	if err != nil {
+		return types.ApprovalResult{}, err
+	}
+
+	signalChan := workflow.GetSignalChannel(ctx, ApprovalSignaleName)
+	selector := workflow.NewSelector(ctx)
+
+	var decision types.ApprovalDecision
+	received := false
+
+	selector.AddReceive(signalChan, func(c workflow.ReceiveChannel, more bool) {
+		c.Receive(ctx, &decision)
+		received = true
+	})
+
+	timerFuture := workflow.NewTimer(ctx, 24*time.Hour)
+	selector.AddFuture(timerFuture, func(f workflow.Future) {
+		logger.Info("approval gate timed out")
+	})
+
+	selector.Select(ctx)
+
+	if !received {
+		currentStatus.Status = "timed_out"
+		return types.ApprovalResult{Status: "timed_out", Report: input.Report}, nil
+	}
+
+	if decision.Action == "reject" {
+		currentStatus.Status = "rejected"
+		return types.ApprovalResult{Status: "rejected", Report: input.Report}, nil
+	}
+
+	currentStatus.Status = "approved"
+	return types.ApprovalResult{Status: "approved", Report: input.Report}, nil
+}

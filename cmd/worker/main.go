@@ -42,6 +42,7 @@ func main() {
 	// register workflows
 	w.RegisterWorkflow(pipeline.ResearchPipelineWorkflow)
 	w.RegisterWorkflow(workflows.AgentLoopWorkflow)
+	w.RegisterWorkflow(workflows.ApprovalGateWorkflow)
 
 	// register activities
 	w.RegisterActivity(llmActivities)

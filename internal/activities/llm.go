@@ -104,11 +104,25 @@ func toOpenAIMessages(messages []types.AgentMessage) []openai.ChatCompletionMess
 }
 
 func classifyOpenAIError(err error) error {
-	var apiErr *openai.APIError
+	if err == nil {
+		return nil
+	}
 
+	errStr := err.Error()
+	if strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "RESOURCE_EXHAUSTED") ||
+		strings.Contains(errStr, "free_tier_requests") {
+
+		return temporal.NewApplicationError(
+			fmt.Sprintf("upstream rate limit hit (will retry): %v", err),
+			"RateLimitError",
+		)
+	}
+
+	var apiErr *openai.APIError
 	if !errors.As(err, &apiErr) {
 		return temporal.NewApplicationError(
-			fmt.Sprintf("openai request failed: %v", err),
+			fmt.Sprintf("gemini request failed: %v", err),
 			"TransientError",
 		)
 	}
@@ -117,35 +131,36 @@ func classifyOpenAIError(err error) error {
 
 	case 401, 403:
 		return temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("openai auth failed: %v", err),
+			fmt.Sprintf("gemini auth failed: %v", err),
 			"PermanentError",
 			err,
 		)
 
 	case 400, 422:
 		return temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("openai bad request: %v", err),
+			fmt.Sprintf("gemini bad request: %v", err),
 			"PermanentError",
 			err,
 		)
 
 	case 429:
-		// quota is over not recoverable by retryin
-		if strings.Contains(apiErr.Message, "exceeded your current quota") {
+		if strings.Contains(apiErr.Message, "exceeded your current quota") &&
+			!strings.Contains(apiErr.Message, "free_tier_requests") {
 			return temporal.NewNonRetryableApplicationError(
-				fmt.Sprintf("openai quota exceeded: %v", err),
+				fmt.Sprintf("gemini account quota exhausted completely: %v", err),
 				"PermanentError",
 				err,
 			)
 		}
+
 		return temporal.NewApplicationError(
-			fmt.Sprintf("openai rate limited: %v", err),
+			fmt.Sprintf("gemini rate limited: %v", err),
 			"RateLimitError",
 		)
 
 	default:
 		return temporal.NewApplicationError(
-			fmt.Sprintf("openai server error: %v", err),
+			fmt.Sprintf("gemini server error: %v", err),
 			"TransientError",
 		)
 	}
