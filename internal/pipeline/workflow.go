@@ -27,7 +27,6 @@ func ResearchPipelineWorkflow(
 	logger := workflow.GetLogger(ctx)
 	logger.Info("pipeline started", "question", input.Question)
 
-	cfg := config.Defaults()
 	llmCtx := workflow.WithActivityOptions(ctx, config.LLMCallOptions)
 	var llmActivities *activities.LLMActivities
 
@@ -47,7 +46,7 @@ func ResearchPipelineWorkflow(
 	var planResp types.LLMCallOutput
 
 	err := workflow.ExecuteActivity(llmCtx, llmActivities.GenericLLMCall, types.LLMCallInput{
-		Model:    cfg.PlanModel,
+		Model:    input.PlanModel,
 		Messages: planMessages}).Get(ctx, &planResp)
 
 	if err != nil {
@@ -107,7 +106,7 @@ func ResearchPipelineWorkflow(
 				types.AgentLoopInput{
 					Task:          q,
 					MaxIterations: 15,
-					Model:         cfg.ResearchModel,
+					Model:         input.ResearchModel,
 				},
 			).Get(gCtx, &result)
 
@@ -156,7 +155,7 @@ func ResearchPipelineWorkflow(
 		llmCtx,
 		llmActivities.GenericLLMCall,
 		types.LLMCallInput{
-			Model:    cfg.SynthesisModel,
+			Model:    input.SynthesisModel,
 			Messages: synthesisMessages,
 		},
 	).Get(ctx, &synthesisResp)

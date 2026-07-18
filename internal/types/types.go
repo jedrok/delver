@@ -64,6 +64,9 @@ type PipelineInput struct {
 	BudgetUSD       float64       `json:"budget_usd"`
 	RequireApproval bool          `json:"require_approval"`
 	ApprovalTimeout time.Duration `json:"approval_timeout,omitempty"`
+	PlanModel       string        `json:"plan_model"`
+	ResearchModel   string        `json:"research_model"`
+	SynthesisModel  string        `json:"synthesis_model"`
 }
 
 type PipelineOutput struct {

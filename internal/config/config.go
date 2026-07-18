@@ -96,11 +96,3 @@ var LongRunningOptions = workflow.ActivityOptions{
 		NonRetryableErrorTypes: []string{"PermanentError"},
 	},
 }
-
-func Defaults() *Config {
-	cfg, err := Load()
-	if err != nil {
-		panic(fmt.Sprintf("failed to load config: %v", err))
-	}
-	return cfg
-}

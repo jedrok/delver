@@ -116,6 +116,9 @@ func runStart(c client.Client, cfg *config.Config, args []string) int {
 			Question:        question,
 			RequireApproval: *requireApproval,
 			ApprovalTimeout: 24 * time.Hour,
+			PlanModel:       cfg.PlanModel,
+			ResearchModel:   cfg.ResearchModel,
+			SynthesisModel:  cfg.SynthesisModel,
 		},
 	)
 	if err != nil {
