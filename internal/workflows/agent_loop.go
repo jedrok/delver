@@ -136,7 +136,7 @@ func ApprovalGateWorkflow(ctx workflow.Context, input types.ApprovalGateInput) (
 		received = true
 	})
 
-	timerFuture := workflow.NewTimer(ctx, 24*time.Hour)
+	timerFuture := workflow.NewTimer(ctx, input.Timeout)
 	selector.AddFuture(timerFuture, func(f workflow.Future) {
 		logger.Info("approval gate timed out")
 	})
@@ -145,12 +145,12 @@ func ApprovalGateWorkflow(ctx workflow.Context, input types.ApprovalGateInput) (
 
 	if !received {
 		currentStatus.Status = "timed_out"
-		return types.ApprovalResult{Status: "timed_out", Report: input.Report}, nil
+		return types.ApprovalResult{Status: "timed_out"}, nil
 	}
 
-	if decision.Action == "reject" {
+	if decision.Action != "approve" {
 		currentStatus.Status = "rejected"
-		return types.ApprovalResult{Status: "rejected", Report: input.Report}, nil
+		return types.ApprovalResult{Status: "rejected"}, nil
 	}
 
 	currentStatus.Status = "approved"

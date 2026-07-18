@@ -75,12 +75,14 @@ func ResearchPipelineWorkflow(
 	for i, q := range plan.SubQuestions {
 		// i, q := i, q
 
-		wg.Add(1)
-
 		// stagger the child workflows by a few secs to avoid hitting api alot
-		if i < 0 {
-			workflow.Sleep(ctx, time.Second*12)
+		if i > 0 {
+			if err := workflow.Sleep(ctx, time.Second*12); err != nil {
+				return types.PipelineOutput{}, err
+			}
 		}
+
+		wg.Add(1)
 
 		workflow.Go(ctx, func(gCtx workflow.Context) {
 			defer wg.Done()
@@ -184,6 +186,9 @@ func ResearchPipelineWorkflow(
 	}
 
 	logger.Info("pipeline complete", "status", approvalResult.Status)
+	if approvalResult.Status != "approved" {
+		return types.PipelineOutput{Status: approvalResult.Status}, nil
+	}
 	return types.PipelineOutput{
 		Report: approvalResult.Report,
 		Status: approvalResult.Status,

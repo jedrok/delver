@@ -20,13 +20,28 @@ type Config struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-
 		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
 		TemporalHost:   os.Getenv("TEMPORAL_HOST_PORT"),
 		TaskQueue:      os.Getenv("TASK_QUEUE"),
 		PlanModel:      os.Getenv("PLAN_MODEL"),
 		ResearchModel:  os.Getenv("RESEARCH_MODEL"),
 		SynthesisModel: os.Getenv("SYNTHESIS_MODEL"),
+	}
+
+	required := []struct {
+		name, val string
+	}{
+		{"GEMINI_API_KEY", cfg.GeminiAPIKey},
+		{"TEMPORAL_HOST_PORT", cfg.TemporalHost},
+		{"TASK_QUEUE", cfg.TaskQueue},
+		{"PLAN_MODEL", cfg.PlanModel},
+		{"RESEARCH_MODEL", cfg.ResearchModel},
+		{"SYNTHESIS_MODEL", cfg.SynthesisModel},
+	}
+	for _, r := range required {
+		if r.val == "" {
+			return nil, fmt.Errorf("%s is required", r.name)
+		}
 	}
 
 	return cfg, nil
