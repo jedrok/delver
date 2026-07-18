@@ -1,3 +1,10 @@
+# Local binaries
+/delver
+/client
+/worker
+/api
+/bin/
+
 # Go Binaries and compiled objects
 *.exe
 *.exe~
