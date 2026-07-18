@@ -29,6 +29,21 @@ func NewToolActivities() *ToolActivities {
 	return ta
 }
 
+func ResearchTools() []types.ToolDef {
+	return []types.ToolDef{
+		{
+			Name:        "web_search",
+			Description: "Search the web. Returns a short summary when one is available.",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"search query"}},"required":["query"]}`),
+		},
+		{
+			Name:        "fetch_page",
+			Description: "Fetch a URL and return a text excerpt of the page.",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","description":"full URL to fetch"}},"required":["url"]}`),
+		},
+	}
+}
+
 // route tool call to the correct handler by name
 func (a *ToolActivities) DispatchTool(ctx context.Context,
 	input types.ToolCallInput) (types.ToolCallOutput, error) {

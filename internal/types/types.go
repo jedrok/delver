@@ -6,8 +6,10 @@ import (
 )
 
 type AgentMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 type ToolDef struct {
@@ -17,6 +19,7 @@ type ToolDef struct {
 }
 
 type ToolCall struct {
+	ID   string          `json:"id,omitempty"`
 	Name string          `json:"name"`
 	Args json.RawMessage `json:"args"`
 }
@@ -28,9 +31,9 @@ type LLMCallInput struct {
 }
 
 type LLMCallOutput struct {
-	Content  string    `json:"content"`
-	Done     bool      `json:"done"`
-	ToolCall *ToolCall `json:"tool_call,omitempty"`
+	Content   string     `json:"content"`
+	Done      bool       `json:"done"`
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type ToolCallInput struct {

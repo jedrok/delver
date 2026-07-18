@@ -107,6 +107,7 @@ func ResearchPipelineWorkflow(
 					Task:          q,
 					MaxIterations: 15,
 					Model:         input.ResearchModel,
+					ToolDef:       activities.ResearchTools(),
 				},
 			).Get(gCtx, &result)
 

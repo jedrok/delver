@@ -46,38 +46,39 @@ func AgentLoopWorkflow(ctx workflow.Context, input types.AgentLoopInput) (types.
 
 		// add the llm response to history
 		history = append(history, types.AgentMessage{
-			Role:    "assistant",
-			Content: decision.Content,
+			Role:      "assistant",
+			Content:   decision.Content,
+			ToolCalls: decision.ToolCalls,
 		})
-
 		// check if the llm is done
-		if decision.Done || decision.ToolCall == nil {
+		if decision.Done || len(decision.ToolCalls) == 0 {
 			logger.Info("agent loop complete", "iterations", iterations+1)
 			break
-
 		}
 
-		// execute the tool call requested
-		var toolResult types.ToolCallOutput
-		err = workflow.ExecuteActivity(toolCtx,
-			toolActivities.DispatchTool,
-			types.ToolCallInput{
-				ToolName: decision.ToolCall.Name,
-				ToolArgs: decision.ToolCall.Args,
-			},
-		).Get(ctx, &toolResult)
-		if err != nil {
-			// tool failed
-			logger.Warn("tool call failed", "tool", decision.ToolCall.Name, "error", err)
+		for _, call := range decision.ToolCalls {
+			var toolResult types.ToolCallOutput
+			err = workflow.ExecuteActivity(toolCtx,
+				toolActivities.DispatchTool,
+				types.ToolCallInput{
+					ToolName: call.Name,
+					ToolArgs: call.Args,
+					CallID:   call.ID,
+				},
+			).Get(ctx, &toolResult)
+			if err != nil {
+				logger.Warn("tool call failed", "tool", call.Name, "error", err)
+				history = append(history, types.AgentMessage{
+					Role:       "tool",
+					ToolCallID: call.ID,
+					Content:    fmt.Sprintf("tool %s failed: %v", call.Name, err),
+				})
+				continue
+			}
 			history = append(history, types.AgentMessage{
-				Role:    "tool",
-				Content: fmt.Sprintf("tool %s failed: %v", decision.ToolCall.Name, err),
-			})
-		} else {
-			// add tool result to history
-			history = append(history, types.AgentMessage{
-				Role:    "tool",
-				Content: toolResult.Result,
+				Role:       "tool",
+				ToolCallID: call.ID,
+				Content:    toolResult.Result,
 			})
 		}
 

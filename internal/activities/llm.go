@@ -54,24 +54,20 @@ func (a *LLMActivities) GenericLLMCall(ctx context.Context, input types.LLMCallI
 		)
 	}
 
-	// check the model response to figure out what it actually wants to do next
 	choice := resp.Choices[0]
-	var toolCall *types.ToolCall
-
-	if choice.FinishReason == "tool_calls" && len(choice.Message.ToolCalls) > 0 {
-		call := choice.Message.ToolCalls[0]
-		toolCall = &types.ToolCall{
+	toolCalls := make([]types.ToolCall, 0, len(choice.Message.ToolCalls))
+	for _, call := range choice.Message.ToolCalls {
+		toolCalls = append(toolCalls, types.ToolCall{
+			ID:   call.ID,
 			Name: call.Function.Name,
 			Args: json.RawMessage(call.Function.Arguments),
-		}
+		})
 	}
 
-	done := choice.FinishReason == "stop"
-
 	return types.LLMCallOutput{
-		Content:  choice.Message.Content,
-		Done:     done,
-		ToolCall: toolCall,
+		Content:   choice.Message.Content,
+		Done:      len(toolCalls) == 0,
+		ToolCalls: toolCalls,
 	}, nil
 }
 
@@ -86,6 +82,7 @@ func toOpenAITools(tools []types.ToolDef) []openai.Tool {
 			Function: &openai.FunctionDefinition{
 				Name:        t.Name,
 				Description: t.Description,
+				Parameters:  t.Parameters,
 			},
 		}
 	}
@@ -95,10 +92,22 @@ func toOpenAITools(tools []types.ToolDef) []openai.Tool {
 func toOpenAIMessages(messages []types.AgentMessage) []openai.ChatCompletionMessage {
 	result := make([]openai.ChatCompletionMessage, len(messages))
 	for i, m := range messages {
-		result[i] = openai.ChatCompletionMessage{
-			Role:    m.Role,
-			Content: m.Content,
+		msg := openai.ChatCompletionMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			ToolCallID: m.ToolCallID,
 		}
+		for _, tc := range m.ToolCalls {
+			msg.ToolCalls = append(msg.ToolCalls, openai.ToolCall{
+				ID:   tc.ID,
+				Type: openai.ToolTypeFunction,
+				Function: openai.FunctionCall{
+					Name:      tc.Name,
+					Arguments: string(tc.Args),
+				},
+			})
+		}
+		result[i] = msg
 	}
 	return result
 }
