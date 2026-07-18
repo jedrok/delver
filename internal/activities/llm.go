@@ -109,10 +109,19 @@ func classifyOpenAIError(err error) error {
 	}
 
 	errStr := err.Error()
-	if strings.Contains(errStr, "429") ||
-		strings.Contains(errStr, "RESOURCE_EXHAUSTED") ||
-		strings.Contains(errStr, "free_tier_requests") {
 
+	// daily free tier / hard account caps will not clear inside retry window
+	// check before the generic 429 path so we do not spin until ScheduleToClose
+	if isNonRetryableQuota(errStr) {
+		return temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("gemini quota exhausted: %v", err),
+			"PermanentError",
+			err,
+		)
+	}
+
+	// short throttles/temporal chills out
+	if isRetryableRateLimit(errStr) {
 		return temporal.NewApplicationError(
 			fmt.Sprintf("upstream rate limit hit (will retry): %v", err),
 			"RateLimitError",
@@ -144,15 +153,14 @@ func classifyOpenAIError(err error) error {
 		)
 
 	case 429:
-		if strings.Contains(apiErr.Message, "exceeded your current quota") &&
-			!strings.Contains(apiErr.Message, "free_tier_requests") {
+		msg := apiErr.Message
+		if isNonRetryableQuota(msg) || isNonRetryableQuota(errStr) {
 			return temporal.NewNonRetryableApplicationError(
-				fmt.Sprintf("gemini account quota exhausted completely: %v", err),
+				fmt.Sprintf("gemini quota exhausted: %v", err),
 				"PermanentError",
 				err,
 			)
 		}
-
 		return temporal.NewApplicationError(
 			fmt.Sprintf("gemini rate limited: %v", err),
 			"RateLimitError",
@@ -164,4 +172,28 @@ func classifyOpenAIError(err error) error {
 			"TransientError",
 		)
 	}
+}
+
+func isNonRetryableQuota(s string) bool {
+	if strings.Contains(s, "PerDay") ||
+		strings.Contains(s, "per day") ||
+		strings.Contains(s, "GenerateRequestsPerDay") {
+		return true
+	}
+	// paid account hard cap which is not free tier per minute throttle
+	if strings.Contains(s, "exceeded your current quota") &&
+		!strings.Contains(s, "free_tier") &&
+		!strings.Contains(s, "PerMinute") {
+		return true
+	}
+	return false
+}
+
+func isRetryableRateLimit(s string) bool {
+	return strings.Contains(s, "429") ||
+		strings.Contains(s, "RESOURCE_EXHAUSTED") ||
+		strings.Contains(s, "free_tier") ||
+		strings.Contains(s, "PerMinute") ||
+		strings.Contains(s, "rate limit") ||
+		strings.Contains(s, "Rate limit")
 }

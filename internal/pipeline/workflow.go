@@ -166,8 +166,20 @@ func ResearchPipelineWorkflow(
 			fmt.Errorf("synthesis phase failed: %w", err)
 	}
 
-	// phase 4 approval
+	if !input.RequireApproval {
+		logger.Info("pipeline complete", "status", "approved")
+		return types.PipelineOutput{
+			Report: synthesisResp.Content,
+			Status: "approved",
+		}, nil
+	}
+
 	logger.Info("phase 4: waiting for approval")
+
+	timeout := input.ApprovalTimeout
+	if timeout == 0 {
+		timeout = 24 * time.Hour
+	}
 
 	var approvalResult types.ApprovalResult
 	approvalCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
@@ -178,7 +190,7 @@ func ResearchPipelineWorkflow(
 	err = workflow.ExecuteChildWorkflow(approvalCtx, workflows.ApprovalGateWorkflow,
 		types.ApprovalGateInput{
 			Report:  synthesisResp.Content,
-			Timeout: 24 * time.Hour,
+			Timeout: timeout,
 		},
 	).Get(ctx, &approvalResult)
 	if err != nil {

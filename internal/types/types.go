@@ -60,8 +60,10 @@ type SynthesisOutput struct {
 }
 
 type PipelineInput struct {
-	Question  string  `json:"question"`
-	BudgetUSD float64 `json:"budget_usd"`
+	Question        string        `json:"question"`
+	BudgetUSD       float64       `json:"budget_usd"`
+	RequireApproval bool          `json:"require_approval"`
+	ApprovalTimeout time.Duration `json:"approval_timeout,omitempty"`
 }
 
 type PipelineOutput struct {

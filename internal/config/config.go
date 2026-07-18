@@ -10,22 +10,24 @@ import (
 )
 
 type Config struct {
-	GeminiAPIKey   string
-	TemporalHost   string
-	TaskQueue      string
-	PlanModel      string
-	ResearchModel  string
-	SynthesisModel string
+	GeminiAPIKey    string
+	TemporalHost    string
+	TaskQueue       string
+	PlanModel       string
+	ResearchModel   string
+	SynthesisModel  string
+	RequireApproval bool
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		GeminiAPIKey:   os.Getenv("GEMINI_API_KEY"),
-		TemporalHost:   os.Getenv("TEMPORAL_HOST_PORT"),
-		TaskQueue:      os.Getenv("TASK_QUEUE"),
-		PlanModel:      os.Getenv("PLAN_MODEL"),
-		ResearchModel:  os.Getenv("RESEARCH_MODEL"),
-		SynthesisModel: os.Getenv("SYNTHESIS_MODEL"),
+		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
+		TemporalHost:    os.Getenv("TEMPORAL_HOST_PORT"),
+		TaskQueue:       os.Getenv("TASK_QUEUE"),
+		PlanModel:       os.Getenv("PLAN_MODEL"),
+		ResearchModel:   os.Getenv("RESEARCH_MODEL"),
+		SynthesisModel:  os.Getenv("SYNTHESIS_MODEL"),
+		RequireApproval: envTruthy(os.Getenv("REQUIRE_APPROVAL")),
 	}
 
 	required := []struct {
@@ -45,6 +47,15 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func envTruthy(v string) bool {
+	switch v {
+	case "1", "true", "TRUE", "yes", "YES", "on", "ON":
+		return true
+	default:
+		return false
+	}
 }
 
 // activity option preset for all llm API calls
