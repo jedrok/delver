@@ -1,14 +1,12 @@
 package workflows
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jedrok/delver/internal/activities"
 	"github.com/jedrok/delver/internal/config"
 	"github.com/jedrok/delver/internal/types"
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -42,14 +40,8 @@ func AgentLoopWorkflow(ctx workflow.Context, input types.AgentLoopInput) (types.
 		}).Get(ctx, &decision)
 
 		if err != nil {
-			var appErr *temporal.ApplicationError
-			// if perm error stop immediately
-			if errors.As(err, &appErr) && appErr.NonRetryable() {
-				return types.ResearchResult{}, err
-			}
-			// transient error
-			logger.Warn("LLM call failed after retries, stopping loop", "error", err)
-			break
+			logger.Warn("LLM call failed after retries", "error", err)
+			return types.ResearchResult{}, err
 		}
 
 		// add the llm response to history
