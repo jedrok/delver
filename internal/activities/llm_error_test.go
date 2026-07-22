@@ -2,6 +2,7 @@ package activities
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -23,6 +24,16 @@ func assertAppErr(t *testing.T, err error, expectedType string, nonRetryable boo
 	}
 	if appErr.NonRetryable() != nonRetryable {
 		t.Errorf("NonRetryable = %v, want %v", appErr.NonRetryable(), nonRetryable)
+	}
+}
+
+func assertNoJSONNoise(t *testing.T, err error) {
+	t.Helper()
+	if strings.Contains(err.Error(), "cannot unmarshal") {
+		t.Errorf("error still has json parse noise: %q", err)
+	}
+	if strings.Contains(err.Error(), `"error"`) {
+		t.Errorf("error still dumps raw json body: %q", err)
 	}
 }
 
@@ -84,4 +95,46 @@ func TestClassifyOpenAIErrorGeneric(t *testing.T) {
 	// plain errors with no api status become transient
 	got := classifyOpenAIError(errors.New("connection reset"))
 	assertAppErr(t, got, "TransientError", false)
+}
+
+func TestClassifyOpenAIErrorGeminiArrayBody(t *testing.T) {
+	// gemini free-tier 429 body as a json array. go-openai fails to parse it
+	body := []byte(`[{
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details.\n* Quota exceeded for metric: generate_content_free_tier_requests\n* quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}]`)
+	raw := &openai.RequestError{
+		HTTPStatusCode: 429,
+		HTTPStatus:     "429 Too Many Requests",
+		Err:            errors.New("json: cannot unmarshal array into Go value of type openai.ErrorResponse"),
+		Body:           body,
+	}
+
+	got := classifyOpenAIError(raw)
+	assertAppErr(t, got, "RateLimitError", false)
+	assertNoJSONNoise(t, got)
+
+	if !strings.Contains(got.Error(), "RESOURCE_EXHAUSTED") &&
+		!strings.Contains(got.Error(), "exceeded your current quota") {
+		t.Errorf("expected gemini message in error, got %q", got)
+	}
+}
+
+func TestGeminiMessageFromBodyArray(t *testing.T) {
+	body := []byte(`[{"error":{"message":"slow down\nmore detail","status":"RESOURCE_EXHAUSTED"}}]`)
+	msg := geminiMessageFromBody(body)
+	if msg != "RESOURCE_EXHAUSTED: slow down" {
+		t.Errorf("got %q", msg)
+	}
+}
+
+func TestGeminiMessageFromBodyObject(t *testing.T) {
+	body := []byte(`{"error":{"message":"bad key","status":"PERMISSION_DENIED"}}`)
+	msg := geminiMessageFromBody(body)
+	if msg != "PERMISSION_DENIED: bad key" {
+		t.Errorf("got %q", msg)
+	}
 }

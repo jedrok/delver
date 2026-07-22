@@ -117,13 +117,15 @@ func classifyOpenAIError(err error) error {
 		return nil
 	}
 
+	// match on the full raw string. including response body. logs get a short summary
 	errStr := err.Error()
+	detail := summarizeGeminiError(err)
 
 	// daily free tier / hard account caps will not clear inside retry window
 	// check before the generic 429 path so we do not spin until ScheduleToClose
 	if isNonRetryableQuota(errStr) {
 		return temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("gemini quota exhausted: %v", err),
+			fmt.Sprintf("gemini quota exhausted: %s", detail),
 			"PermanentError",
 			err,
 		)
@@ -132,55 +134,127 @@ func classifyOpenAIError(err error) error {
 	// short throttles/temporal chills out
 	if isRetryableRateLimit(errStr) {
 		return temporal.NewApplicationError(
-			fmt.Sprintf("upstream rate limit hit (will retry): %v", err),
+			fmt.Sprintf("upstream rate limit hit (will retry): %s", detail),
 			"RateLimitError",
 		)
 	}
 
-	var apiErr *openai.APIError
-	if !errors.As(err, &apiErr) {
-		return temporal.NewApplicationError(
-			fmt.Sprintf("gemini request failed: %v", err),
-			"TransientError",
-		)
+	if apiErr, ok := errors.AsType[*openai.APIError](err); ok {
+		return classifyByStatus(apiErr.HTTPStatusCode, detail, err)
 	}
+	// RequestError still has a status when the openai body parser failed
+	if reqErr, ok := errors.AsType[*openai.RequestError](err); ok && reqErr.HTTPStatusCode > 0 {
+		return classifyByStatus(reqErr.HTTPStatusCode, detail, err)
+	}
+	return temporal.NewApplicationError(
+		fmt.Sprintf("gemini request failed: %s", detail),
+		"TransientError",
+	)
+}
 
-	switch apiErr.HTTPStatusCode {
-
+func classifyByStatus(code int, detail string, cause error) error {
+	switch code {
 	case 401, 403:
 		return temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("gemini auth failed: %v", err),
+			fmt.Sprintf("gemini auth failed: %s", detail),
 			"PermanentError",
-			err,
+			cause,
 		)
-
 	case 400, 422:
 		return temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("gemini bad request: %v", err),
+			fmt.Sprintf("gemini bad request: %s", detail),
 			"PermanentError",
-			err,
+			cause,
 		)
-
 	case 429:
-		msg := apiErr.Message
-		if isNonRetryableQuota(msg) || isNonRetryableQuota(errStr) {
+		// use full cause text here so free_tier / PerMinute markers are not lost
+		if isNonRetryableQuota(cause.Error()) {
 			return temporal.NewNonRetryableApplicationError(
-				fmt.Sprintf("gemini quota exhausted: %v", err),
+				fmt.Sprintf("gemini quota exhausted: %s", detail),
 				"PermanentError",
-				err,
+				cause,
 			)
 		}
 		return temporal.NewApplicationError(
-			fmt.Sprintf("gemini rate limited: %v", err),
+			fmt.Sprintf("gemini rate limited: %s", detail),
 			"RateLimitError",
 		)
-
 	default:
 		return temporal.NewApplicationError(
-			fmt.Sprintf("gemini server error: %v", err),
+			fmt.Sprintf("gemini server error: %s", detail),
 			"TransientError",
 		)
 	}
+}
+
+// pull short human message out of go-openai errors
+// gemini sometimes returns a json array body and go-openai then puts the raw body
+// and cannot unmarshal array noise into err.Error() so we strip that here
+func summarizeGeminiError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	if reqErr, ok := errors.AsType[*openai.RequestError](err); ok {
+		if msg := geminiMessageFromBody(reqErr.Body); msg != "" {
+			if reqErr.HTTPStatusCode > 0 {
+				return fmt.Sprintf("status %d: %s", reqErr.HTTPStatusCode, msg)
+			}
+			return msg
+		}
+		if reqErr.HTTPStatusCode > 0 {
+			return fmt.Sprintf("status %d: %s", reqErr.HTTPStatusCode, reqErr.HTTPStatus)
+		}
+	}
+
+	if apiErr, ok := errors.AsType[*openai.APIError](err); ok {
+		if apiErr.Message != "" {
+			return firstLine(apiErr.Message)
+		}
+		return firstLine(apiErr.Error())
+	}
+
+	return firstLine(err.Error())
+}
+
+// gemini openai-compat errors are usually {"error":{...}} but free-tier 429s
+// sometimes arrive as a one-element array of that object.
+func geminiMessageFromBody(body []byte) string {
+	body = []byte(strings.TrimSpace(string(body)))
+	if len(body) == 0 {
+		return ""
+	}
+
+	payload := body
+	if body[0] == '[' {
+		var arr []json.RawMessage
+		if err := json.Unmarshal(body, &arr); err != nil || len(arr) == 0 {
+			return ""
+		}
+		payload = arr[0]
+	}
+
+	var wrap struct {
+		Error struct {
+			Message string `json:"message"`
+			Status  string `json:"status"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(payload, &wrap); err != nil || wrap.Error.Message == "" {
+		return ""
+	}
+
+	msg := firstLine(wrap.Error.Message)
+	if wrap.Error.Status != "" {
+		return wrap.Error.Status + ": " + msg
+	}
+	return msg
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	before, _, _ := strings.Cut(s, "\n")
+	return strings.TrimSpace(before)
 }
 
 func isNonRetryableQuota(s string) bool {

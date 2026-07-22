@@ -53,6 +53,23 @@ func TestWebSearchBadArgs(t *testing.T) {
 	assertPermanent(t, err)
 }
 
+func TestDuckDuckGoURLEncodesQuery(t *testing.T) {
+	// spaces and "?" must not appear raw in the query string
+	got := duckDuckGoURL("What is the capital of Uganda?")
+	if strings.Contains(got, " ") {
+		t.Errorf("url still has spaces: %q", got)
+	}
+	if strings.Contains(got, "Uganda?") {
+		t.Errorf("raw ? in query value breaks the url: %q", got)
+	}
+	if !strings.Contains(got, "What") || !strings.Contains(got, "Uganda") {
+		t.Errorf("missing query text: %q", got)
+	}
+	if !strings.Contains(got, "format=json") {
+		t.Errorf("missing format=json: %q", got)
+	}
+}
+
 func TestFetchPageBadArgs(t *testing.T) {
 	ta := NewToolActivities()
 

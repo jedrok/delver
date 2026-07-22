@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/jedrok/delver/internal/types"
 	"go.temporal.io/sdk/activity"
@@ -92,10 +93,19 @@ func (a *ToolActivities) webSearch(ctx context.Context,
 		)
 	}
 
-	url := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1",
-		input.Query)
+	// must encode query spaces and "?" break the url and nginx returns 400 html
+	endpoint := duckDuckGoURL(input.Query)
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("web_search bad request: %v", err),
+			"PermanentError",
+			err,
+		)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", temporal.NewApplicationError(
 			fmt.Sprintf("web_search request failed: %v", err),
@@ -104,7 +114,7 @@ func (a *ToolActivities) webSearch(ctx context.Context,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", temporal.NewApplicationError(
 			fmt.Sprintf("web_search read failed: %v", err),
@@ -112,10 +122,20 @@ func (a *ToolActivities) webSearch(ctx context.Context,
 		)
 	}
 
-	var result map[string]any
+	// avoid feeding html error pages back to the model as search results
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", temporal.NewApplicationError(
+			fmt.Sprintf("web_search http %d", resp.StatusCode),
+			"TransientError",
+		)
+	}
 
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
-		return string(body), nil
+		return "", temporal.NewApplicationError(
+			fmt.Sprintf("web_search bad json: %v", err),
+			"TransientError",
+		)
 	}
 
 	abstract, ok := result["Abstract"].(string)
@@ -128,6 +148,14 @@ func (a *ToolActivities) webSearch(ctx context.Context,
 	}
 
 	return abstract, nil
+}
+
+func duckDuckGoURL(query string) string {
+	return "https://api.duckduckgo.com/?" + url.Values{
+		"q":       {query},
+		"format":  {"json"},
+		"no_html": {"1"},
+	}.Encode()
 }
 
 type fetchPageArgs struct {
